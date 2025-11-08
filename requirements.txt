@@ -1,0 +1,8 @@
+Django
+requests
+nltk
+pyspark
+pandas
+gunicorn
+django-cors-headers
+djangorestframework
