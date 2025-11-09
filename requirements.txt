@@ -6,3 +6,4 @@ pandas
 gunicorn
 django-cors-headers
 djangorestframework
+whitenoise
