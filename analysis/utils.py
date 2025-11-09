@@ -1,9 +1,7 @@
 import requests
 import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
-from pyspark.sql import SparkSession
-from pyspark.sql.functions import udf, col, concat, lit
-from pyspark.sql.types import StringType
+import pandas as pd
 from django.http import JsonResponse
 
 def sentiment_view(request):
@@ -13,10 +11,8 @@ nltk.download('vader_lexicon')
 
 def get_sentiment_analysis():
     analyzer = SentimentIntensityAnalyzer()
-    spark = SparkSession.builder.master("local[*]").appName("NewsSentiment").getOrCreate()
     
     def get_sentiment(text):
-
         if not text:
             return "Neutral"
         score = analyzer.polarity_scores(text)['compound']
@@ -27,14 +23,13 @@ def get_sentiment_analysis():
         else:
             return "Neutral"
     
-    sentiment_udf = udf(get_sentiment, StringType())
     url = "https://newsdata.io/api/1/latest"
 
-# Parameters - removing size as it may not be supported in free tier
+    # Parameters - removing size as it may not be supported in free tier
     params = {
-    "apikey": "pub_0623eb3fbe6a42f89077c65a8860fe24",  
-    "language": "en"
-}
+        "apikey": "pub_0623eb3fbe6a42f89077c65a8860fe24",  
+        "language": "en"
+    }
 
     response = requests.get(url, params=params)
     data = response.json()
@@ -54,12 +49,12 @@ def get_sentiment_analysis():
     if not new_articles:
         return []
 
-    df = spark.createDataFrame(new_articles)
-    df = df.withColumn("text", concat(col("title"), lit(" "), col("description")))
-    df = df.withColumn("sentiment", sentiment_udf(col("text")))
+    # Use pandas instead of PySpark
+    df = pd.DataFrame(new_articles)
+    df["text"] = df["title"] + " " + df["description"].fillna("")
+    df["sentiment"] = df["text"].apply(get_sentiment)
 
-    results = df.select("title", "sentiment").toPandas().to_dict(orient="records")
-    spark.stop()
+    results = df[["title", "sentiment"]].to_dict(orient="records")
     return results
 
 def fetch_all_news():
@@ -75,9 +70,8 @@ def fetch_all_news():
      return data
 
 def get_sentiment_analysis_enhanced():
-    """Get sentiment analysis for multiple pages of articles"""
+    """Get sentiment analysis for multiple pages of articles using pandas instead of PySpark"""
     analyzer = SentimentIntensityAnalyzer()
-    spark = SparkSession.builder.master("local[*]").appName("NewsSentiment").getOrCreate()
     
     def get_sentiment(text):
         if not text:
@@ -90,7 +84,6 @@ def get_sentiment_analysis_enhanced():
         else:
             return "Neutral"
     
-    sentiment_udf = udf(get_sentiment, StringType())
     url = "https://newsdata.io/api/1/latest"
     
     all_articles = []
@@ -148,13 +141,12 @@ def get_sentiment_analysis_enhanced():
             break
     
     if not all_articles:
-        spark.stop()
         return []
 
-    df = spark.createDataFrame(all_articles)
-    df = df.withColumn("text", concat(col("title"), lit(" "), col("description")))
-    df = df.withColumn("sentiment", sentiment_udf(col("text")))
+    # Use pandas instead of PySpark
+    df = pd.DataFrame(all_articles)
+    df["text"] = df["title"] + " " + df["description"].fillna("")
+    df["sentiment"] = df["text"].apply(get_sentiment)
 
-    results = df.select("title", "sentiment").toPandas().to_dict(orient="records")
-    spark.stop()
+    results = df[["title", "sentiment"]].to_dict(orient="records")
     return results
